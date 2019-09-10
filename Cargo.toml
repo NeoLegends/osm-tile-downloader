@@ -1,0 +1,14 @@
+[package]
+name = "osm-tile-downloader"
+description = "Download tiles from an OSM tileserver"
+version = "0.1.0"
+authors = ["Moritz Gunz <moritz.gunz@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+clap = "2.33.0"
+futures-preview = { version = "0.3.0-alpha.18", features = ["async-await", "compat", "io-compat", "nightly"] }
+indicatif = "0.11.0"
+reqwest = { git = "https://github.com/seanmonstar/reqwest" }
+strfmt = "0.1.6"
+tokio = "0.2.0-alpha.3"
