@@ -56,18 +56,14 @@ pub async fn fetch(cfg: Config<'_>) -> Result<(), Error> {
     }
 
     let pb = ProgressBar::new(cfg.tiles().count() as u64);
-    pb.enable_steady_tick(16);
 
     let client = Client::new();
-    stream::iter(cfg.tiles())
+    stream::iter(pb.wrap_iter(cfg.tiles()))
         .for_each_concurrent(cfg.fetch_rate as usize, |tile| {
             let tile_2 = tile;
-            let pb = pb.clone();
 
             tile.fetch_from(&client, cfg.url, cfg.output_folder)
                 .map(move |res| {
-                    pb.inc(1);
-
                     if let Err(e) = res {
                         eprintln!(
                             "Failed fetching {}/{}/{}: {:?}",
