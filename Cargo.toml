@@ -5,6 +5,11 @@ version = "0.1.0"
 authors = ["Moritz Gunz <moritz.gunz@gmail.com>"]
 edition = "2018"
 
+repository = "https://github.com/NeoLegends/osm-tile-downloader"
+keywords = ["open", "street", "map", "osm", "tile"]
+categories = ["command-line-utilities"]
+license = "MIT"
+
 [dependencies]
 clap = "2.33.0"
 futures-preview = { version = "0.3.0-alpha.18", features = ["async-await", "compat", "io-compat", "nightly"] }
