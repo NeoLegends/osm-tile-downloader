@@ -1,6 +1,6 @@
 use futures::{prelude::*, stream};
 use indicatif::ProgressBar;
-use reqwest::r#async::Client;
+use reqwest::Client;
 use std::{
     collections::HashMap,
     f64,
@@ -173,9 +173,11 @@ impl Tile {
         target.push(self.y.to_string());
         let mut file = tokio::fs::File::create(target).await?;
 
-        let body = resp.body_mut();
-        while let Some(maybe_chunk) = body.next().await {
-            let chunk = maybe_chunk.map_err(|e| Error::new(ErrorKind::Other, e))?;
+        while let Some(chunk) = resp
+            .chunk()
+            .await
+            .map_err(|e| Error::new(ErrorKind::Other, e))?
+        {
             file.write_all(&chunk).await?;
         }
 
