@@ -13,7 +13,8 @@ const BBOX_EAST_ARG: &str = "BBOX_EAST";
 const OUTPUT_ARG: &str = "OUTPUT";
 const PARALLEL_FETCHES_ARG: &str = "PARALLEL_FETCHES";
 const UP_TO_ZOOM_ARG: &str = "UP_TO_ZOOM";
-const URL_ARG: &str = "URL_ARG";
+const URL_ARG: &str = "URL";
+const TIMEOUT_ARG: &str = "TIMEOUT";
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
@@ -92,6 +93,15 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 .long("rate"),
         )
         .arg(
+            Arg::with_name(TIMEOUT_ARG)
+                .help("The timeout (in seconds) for fetching a single tile. Pass 0 for no timeout.")
+                .validator(is_numeric::<u64>)
+                .default_value("10")
+                .takes_value(true)
+                .short("t")
+                .long("timeout"),
+        )
+        .arg(
             Arg::with_name(UP_TO_ZOOM_ARG)
                 .help("The maximum zoom level to fetch")
                 .validator(is_numeric::<u8>)
@@ -132,6 +142,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
             .unwrap(),
         output_folder: Path::new(matches.value_of(OUTPUT_ARG).unwrap()),
         url: matches.value_of(URL_ARG).unwrap(),
+        timeout_secs: matches.value_of(TIMEOUT_ARG).unwrap().parse().unwrap(),
         zoom_level: matches.value_of(UP_TO_ZOOM_ARG).unwrap().parse().unwrap(),
     };
 

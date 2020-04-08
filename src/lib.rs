@@ -8,6 +8,8 @@ use std::{
     fs,
     io::{Error, ErrorKind},
     path::Path,
+    time::Duration,
+    u64,
 };
 use tokio::{self, prelude::*};
 
@@ -34,6 +36,9 @@ pub struct Config<'a> {
     /// specifiers `{x}`, `{y}` and `{z}`.
     pub url: &'a str,
 
+    /// Timeout for fetching a single tile.
+    pub timeout_secs: u64,
+
     /// The zoom level to download to.
     pub zoom_level: u8,
 }
@@ -57,7 +62,15 @@ pub async fn fetch(cfg: Config<'_>) -> Result<(), Error> {
 
     let pb = ProgressBar::new(cfg.tiles().count() as u64);
 
-    let client = Client::new();
+    let mut builder = Client::builder();
+    if cfg.timeout_secs > 0 {
+        builder = builder.timeout(Duration::from_secs(cfg.timeout_secs));
+    }
+
+    let client = builder
+        .build()
+        .map_err(|e| Error::new(ErrorKind::Other, e))?;
+
     stream::iter(pb.wrap_iter(cfg.tiles()))
         .for_each_concurrent(cfg.fetch_rate as usize, |tile| {
             let tile_2 = tile;
