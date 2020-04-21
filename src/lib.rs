@@ -154,7 +154,7 @@ impl BoundingBox {
 }
 
 impl Config<'_> {
-    pub fn tiles(&self) -> impl Iterator<Item = Tile> {
+    pub fn tiles(&self) -> impl Iterator<Item = Tile> + Debug {
         self.bounding_box.tiles(self.zoom_level)
     }
 }
