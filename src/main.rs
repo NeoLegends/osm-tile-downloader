@@ -1,8 +1,9 @@
+use anyhow::Result;
 use clap::{
     app_from_crate, crate_authors, crate_description, crate_name, crate_version,
     AppSettings, Arg,
 };
-use std::{error::Error, f64, path::Path, str::FromStr};
+use std::{f64, path::Path, str::FromStr};
 
 use osm_tile_downloader::*;
 
@@ -17,7 +18,7 @@ const URL_ARG: &str = "URL";
 const TIMEOUT_ARG: &str = "TIMEOUT";
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn Error>> {
+async fn main() -> Result<()> {
     fn is_numeric<T: FromStr>(v: String) -> Result<(), String> {
         v.parse::<T>()
             .map(|_| ())

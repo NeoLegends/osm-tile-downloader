@@ -1,3 +1,4 @@
+use anyhow::{Context, Result};
 use futures::{prelude::*, stream};
 use indicatif::ProgressBar;
 use reqwest::Client;
@@ -6,7 +7,6 @@ use std::{
     f64,
     fmt::Debug,
     fs,
-    io::{Error, ErrorKind},
     path::Path,
     time::Duration,
     u64,
@@ -50,14 +50,15 @@ pub struct Tile {
     z: u8,
 }
 
-pub async fn fetch(cfg: Config<'_>) -> Result<(), Error> {
+pub async fn fetch(cfg: Config<'_>) -> Result<()> {
     assert!(
         !cfg.output_folder.exists() || cfg.output_folder.is_dir(),
         "output must be a directory",
     );
 
     if !cfg.output_folder.exists() {
-        fs::create_dir_all(cfg.output_folder)?;
+        fs::create_dir_all(cfg.output_folder)
+            .with_context(|| "failed to create root output directory")?;
     }
 
     let pb = ProgressBar::new(cfg.tiles().count() as u64);
@@ -69,7 +70,7 @@ pub async fn fetch(cfg: Config<'_>) -> Result<(), Error> {
 
     let client = builder
         .build()
-        .map_err(|e| Error::new(ErrorKind::Other, e))?;
+        .with_context(|| "failed creating HTTP client")?;
 
     stream::iter(pb.wrap_iter(cfg.tiles()))
         .for_each_concurrent(cfg.fetch_rate as usize, |tile| {
@@ -164,34 +165,39 @@ impl Tile {
         client: &Client,
         url_fmt: &str,
         output_folder: &Path,
-    ) -> Result<(), Error> {
+    ) -> Result<()> {
         let mut map = HashMap::with_capacity(3);
         map.insert("x".to_owned(), self.x);
         map.insert("y".to_owned(), self.y);
         map.insert("z".to_owned(), self.z as usize);
 
-        let formatted_url =
-            strfmt::strfmt(url_fmt, &map).expect("failed formatting URL");
-        let mut resp = client
-            .get(&formatted_url)
-            .send()
-            .map_err(|e| Error::new(ErrorKind::Other, e))
-            .await?;
+        let formatted_url = strfmt::strfmt(url_fmt, &map)
+            .with_context(|| "failed formatting URL")?;
+        let mut resp =
+            client.get(&formatted_url).send().await.with_context(|| {
+                format!("failed fetching tile {}x{}x{}", self.x, self.y, self.z)
+            })?;
 
         let mut target = output_folder.join(self.z.to_string());
         target.push(self.x.to_string());
 
-        tokio::fs::create_dir_all(&target).await?;
+        tokio::fs::create_dir_all(&target).await.with_context(|| {
+            format!(
+                "failed creating output directory for tile {}x{}x{}",
+                self.x, self.y, self.z
+            )
+        })?;
 
         target.push(self.y.to_string());
         let mut file = tokio::fs::File::create(target).await?;
 
-        while let Some(chunk) = resp
-            .chunk()
-            .await
-            .map_err(|e| Error::new(ErrorKind::Other, e))?
-        {
-            file.write_all(&chunk).await?;
+        while let Some(chunk) = resp.chunk().await? {
+            file.write_all(&chunk).await.with_context(|| {
+                format!(
+                    "failed streaming tile {}x{}x{} to disk",
+                    self.x, self.y, self.z
+                )
+            })?;
         }
 
         Ok(())
