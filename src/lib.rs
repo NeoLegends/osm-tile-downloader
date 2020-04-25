@@ -186,9 +186,19 @@ impl Tile {
 
         let formatted_url = strfmt::strfmt(url_fmt, &map)
             .with_context(|| "failed formatting URL")?;
-        let mut resp =
-            client.get(&formatted_url).send().await.with_context(|| {
+        let mut resp = client
+            .get(&formatted_url)
+            .send()
+            .await
+            .with_context(|| {
                 format!("failed fetching tile {}x{}x{}", self.x, self.y, self.z)
+            })?
+            .error_for_status()
+            .with_context(|| {
+                format!(
+                    "received invalid status code fecthing tile {}x{}x{}",
+                    self.x, self.y, self.z
+                )
             })?;
 
         let mut target = output_folder.join(self.z.to_string());
