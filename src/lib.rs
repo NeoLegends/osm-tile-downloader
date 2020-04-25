@@ -4,13 +4,7 @@ use indicatif::ProgressBar;
 use rand::{self, seq::SliceRandom};
 use reqwest::Client;
 use std::{
-    collections::HashMap,
-    f64,
-    fmt::Debug,
-    fs,
-    path::Path,
-    time::Duration,
-    u64,
+    collections::HashMap, f64, fmt::Debug, fs, path::Path, time::Duration, u64,
 };
 use tokio::{self, prelude::*};
 
