@@ -6,7 +6,7 @@ use reqwest::Client;
 use std::{
     collections::HashMap, f64, fmt::Debug, fs, path::Path, time::Duration, u64,
 };
-use tokio::{self, prelude::*};
+use tokio::{self, prelude::*, time};
 
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub struct BoundingBox {
@@ -26,6 +26,9 @@ pub struct Config<'a> {
 
     /// The folder to output the data to.
     pub output_folder: &'a Path,
+
+    /// How many times to retry a failed HTTP request.
+    pub request_retries_amount: u8,
 
     /// The URL to download individual tiles from including the replacement
     /// specifiers `{x}`, `{y}` and `{z}`.
@@ -69,17 +72,23 @@ pub async fn fetch(cfg: Config<'_>) -> Result<()> {
 
     stream::iter(pb.wrap_iter(cfg.tiles()))
         .for_each_concurrent(cfg.fetch_rate as usize, |tile| {
-            let tile_2 = tile;
+            let http_client = client.clone();
 
-            tile.fetch_from(&client, cfg.url, cfg.output_folder)
-                .map(move |res| {
-                    if let Err(e) = res {
-                        eprintln!(
-                            "Failed fetching {}/{}/{}: {:?}",
-                            tile_2.z, tile_2.x, tile_2.y, e
-                        );
+            async move {
+                for _ in 0..cfg.request_retries_amount {
+                    let res = tile
+                        .fetch_from(&http_client, cfg.url, cfg.output_folder)
+                        .await;
+
+                    if res.is_ok() {
+                        return;
                     }
-                })
+
+                    time::delay_for(Duration::from_secs(3)).await;
+                }
+
+                eprintln!("Failed fetching tile {}x{}x{}.", tile.z, tile.x, tile.y);
+            }
         })
         .await;
 

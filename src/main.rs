@@ -13,6 +13,7 @@ const BBOX_WEST_ARG: &str = "BBOX_WEST";
 const BBOX_EAST_ARG: &str = "BBOX_EAST";
 const OUTPUT_ARG: &str = "OUTPUT";
 const PARALLEL_FETCHES_ARG: &str = "PARALLEL_FETCHES";
+const REQUEST_RETRIES_ARG: &str = "REQUEST_RETRIES";
 const UP_TO_ZOOM_ARG: &str = "UP_TO_ZOOM";
 const URL_ARG: &str = "URL";
 const TIMEOUT_ARG: &str = "TIMEOUT";
@@ -23,6 +24,14 @@ async fn main() -> Result<()> {
         v.parse::<T>()
             .map(|_| ())
             .map_err(|_| "must be numeric".to_owned())
+    }
+    fn is_positive_u8(v: String) -> Result<(), String> {
+        let val = v.parse::<u8>().map_err(|_| "must be numeric".to_owned())?;
+        if val > 0 {
+            Ok(())
+        } else {
+            Err("must be > 0".to_owned())
+        }
     }
     fn is_geo_coord(v: String) -> Result<(), String> {
         let val = v.parse::<f64>().map_err(|_| "must be numeric".to_owned())?;
@@ -78,20 +87,19 @@ async fn main() -> Result<()> {
         .arg(
             Arg::with_name(PARALLEL_FETCHES_ARG)
                 .help("The amount of tiles fetched in parallel.")
-                .validator(|v| match v.parse::<u8>() {
-                    Ok(v) => {
-                        if v > 0 {
-                            Ok(())
-                        } else {
-                            Err("must be > 0".to_owned())
-                        }
-                    }
-                    Err(_) => Err("must be numeric".to_owned()),
-                })
+                .validator(is_positive_u8)
                 .default_value("5")
                 .takes_value(true)
                 .short("r")
                 .long("rate"),
+        )
+        .arg(
+            Arg::with_name(REQUEST_RETRIES_ARG)
+                .help("The amount of times to retry a failed HTTP request.")
+                .validator(is_positive_u8)
+                .default_value("3")
+                .takes_value(true)
+                .long("retries"),
         )
         .arg(
             Arg::with_name(TIMEOUT_ARG)
@@ -142,6 +150,11 @@ async fn main() -> Result<()> {
             .parse()
             .unwrap(),
         output_folder: Path::new(matches.value_of(OUTPUT_ARG).unwrap()),
+        request_retries_amount: matches
+            .value_of(REQUEST_RETRIES_ARG)
+            .unwrap()
+            .parse()
+            .unwrap(),
         url: matches.value_of(URL_ARG).unwrap(),
         timeout_secs: matches.value_of(TIMEOUT_ARG).unwrap().parse().unwrap(),
         zoom_level: matches.value_of(UP_TO_ZOOM_ARG).unwrap().parse().unwrap(),

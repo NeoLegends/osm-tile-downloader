@@ -18,4 +18,4 @@ indicatif = "0.11.0"
 rand = "0.7.3"
 reqwest = "0.10"
 strfmt = "0.1.6"
-tokio = { version = "0.2", features = ["fs", "macros"] }
+tokio = { version = "0.2", features = ["fs", "macros", "time"] }
