@@ -121,7 +121,7 @@ async fn main() -> Result<()> {
         )
         .arg(
             Arg::with_name(URL_ARG)
-                .help("The URL with format specifiers `{x}`, `{y}`, `{z}` to fetch the tiles from")
+                .help("The URL with format specifiers `{x}`, `{y}`, `{z}` to fetch the tiles from. Also supports the format specifier `{s}` which is replaced with `a`, `b` or `c` randomly to spread the load between different servers.")
                 .required(true)
                 .takes_value(true)
                 .short("u")

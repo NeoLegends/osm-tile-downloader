@@ -1,6 +1,7 @@
 use anyhow::{Context, Result};
 use futures::{prelude::*, stream};
 use indicatif::ProgressBar;
+use rand::{self, seq::SliceRandom};
 use reqwest::Client;
 use std::{
     collections::HashMap,
@@ -166,10 +167,19 @@ impl Tile {
         url_fmt: &str,
         output_folder: &Path,
     ) -> Result<()> {
+        const OSM_SERVERS: &[&'static str] = &["a", "b", "c"];
+
         let mut map = HashMap::with_capacity(3);
-        map.insert("x".to_owned(), self.x);
-        map.insert("y".to_owned(), self.y);
-        map.insert("z".to_owned(), self.z as usize);
+        map.insert(
+            "s".to_owned(),
+            OSM_SERVERS
+                .choose(&mut rand::thread_rng())
+                .unwrap()
+                .to_string(),
+        );
+        map.insert("x".to_owned(), self.x.to_string());
+        map.insert("y".to_owned(), self.y.to_string());
+        map.insert("z".to_owned(), self.z.to_string());
 
         let formatted_url = strfmt::strfmt(url_fmt, &map)
             .with_context(|| "failed formatting URL")?;
