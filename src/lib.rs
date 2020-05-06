@@ -184,7 +184,7 @@ impl Tile {
         const OSM_SERVERS: &[&'static str] = &["a", "b", "c"];
 
         let formatted_url = {
-            let mut map = HashMap::with_capacity(3);
+            let mut map = HashMap::with_capacity(4);
             map.insert(
                 "s".to_owned(),
                 OSM_SERVERS
