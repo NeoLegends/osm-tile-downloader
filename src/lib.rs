@@ -88,8 +88,10 @@ pub async fn fetch(cfg: Config<'_>) -> Result<()> {
             let http_client = client.clone();
 
             async move {
+                let mut res = Ok(());
+
                 for _ in 0..cfg.request_retries_amount {
-                    let res = tile
+                    res = tile
                         .fetch_from(&http_client, cfg.url, cfg.output_folder)
                         .await;
 
@@ -100,7 +102,13 @@ pub async fn fetch(cfg: Config<'_>) -> Result<()> {
                     time::delay_for(BACKOFF_DELAY).await;
                 }
 
-                eprintln!("Failed fetching tile {}x{}x{}.", tile.z, tile.x, tile.y);
+                eprintln!(
+                    "Failed fetching tile {}x{}x{}: {:?}",
+                    tile.z,
+                    tile.x,
+                    tile.y,
+                    res.unwrap_err(),
+                );
             }
         })
         .await;
