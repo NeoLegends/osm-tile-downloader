@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 use futures::{prelude::*, stream};
 use indicatif::ProgressBar;
 use rand::{self, seq::SliceRandom};
-use reqwest::Client;
+use reqwest::{Client, StatusCode};
 use std::{
     collections::HashMap,
     f64,
@@ -17,6 +17,8 @@ use tokio::{
     fs::{self, File},
     io, time,
 };
+
+const BACKOFF_DELAY: Duration = Duration::from_secs(10);
 
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub struct BoundingBox {
@@ -95,7 +97,7 @@ pub async fn fetch(cfg: Config<'_>) -> Result<()> {
                         return;
                     }
 
-                    time::delay_for(Duration::from_secs(3)).await;
+                    time::delay_for(BACKOFF_DELAY).await;
                 }
 
                 eprintln!("Failed fetching tile {}x{}x{}.", tile.z, tile.x, tile.y);
@@ -199,11 +201,25 @@ impl Tile {
             strfmt::strfmt(url_fmt, &map).context("failed formatting URL")?
         };
 
-        let mut response_reader = {
+        let mut response_reader = loop {
             let raw_response =
                 client.get(&formatted_url).send().await.with_context(|| {
                     format!("failed fetching tile {}x{}x{}", self.x, self.y, self.z)
                 })?;
+
+            if raw_response.status() == StatusCode::TOO_MANY_REQUESTS {
+                let retry_after = raw_response
+                    .headers()
+                    .get("Retry-After")
+                    .and_then(|v| v.to_str().ok())
+                    .and_then(|val| val.parse::<u64>().ok())
+                    .map(Duration::from_secs)
+                    .unwrap_or(BACKOFF_DELAY);
+
+                time::delay_for(retry_after).await;
+                continue;
+            }
+
             let status_checked_response =
                 raw_response.error_for_status().with_context(|| {
                     format!(
@@ -215,7 +231,7 @@ impl Tile {
                 .bytes_stream()
                 .map_err(|e| IoError::new(ErrorKind::Other, e));
 
-            io::stream_reader(response_stream)
+            break io::stream_reader(response_stream);
         };
 
         let mut output_file = {
