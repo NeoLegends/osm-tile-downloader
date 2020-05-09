@@ -223,7 +223,7 @@ impl Tile {
             let status_checked_response =
                 raw_response.error_for_status().with_context(|| {
                     format!(
-                        "received invalid status code fecthing tile {}x{}x{}",
+                        "received invalid status code fetching tile {}x{}x{}",
                         self.x, self.y, self.z
                     )
                 })?;
