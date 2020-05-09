@@ -398,6 +398,18 @@ mod tests {
     use super::*;
 
     #[test]
+    #[should_panic]
+    fn bbox_panics_deg() {
+        BoundingBox::new_deg(360.0, 0.0, 0.0, 0.0);
+    }
+
+    #[test]
+    #[should_panic]
+    fn bbox_panics_rad() {
+        BoundingBox::new(7.0, 3.0, 3.0, 3.0);
+    }
+
+    #[test]
     fn tile_index() {
         assert_eq!(
             tile_indices(18, 6.0402f64.to_radians(), 50.7929f64.to_radians()),
