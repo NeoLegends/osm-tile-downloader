@@ -220,14 +220,14 @@ impl Tile {
                 continue;
             }
 
-            let status_checked_response =
-                raw_response.error_for_status().with_context(|| {
+            let response_stream = raw_response
+                .error_for_status()
+                .with_context(|| {
                     format!(
                         "received invalid status code fetching tile {}x{}x{}",
                         self.x, self.y, self.z
                     )
-                })?;
-            let response_stream = status_checked_response
+                })?
                 .bytes_stream()
                 .map_err(|e| IoError::new(ErrorKind::Other, e));
 
