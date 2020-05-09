@@ -1,7 +1,7 @@
 [package]
 name = "osm-tile-downloader"
 description = "Download tiles from an OSM tileserver"
-version = "0.2.1"
+version = "0.2.2"
 authors = ["Moritz Gunz <moritz.gunz@gmail.com>"]
 edition = "2018"
 
