@@ -1,3 +1,51 @@
+//! Download OpenStreetMap-tiles to your disk en-masse.
+//!
+//! **Use with absolute caution.** Downloading tiles en-masse can hog
+//! down a tile server easily. I am not responsible for any damage this
+//! tool may cause.
+//!
+//! # Usage
+//!
+//! This tool is available on [crates.io](https://crates.io) and can be
+//! installed via `cargo install osm-tile-downloader`. It features a helpful
+//! CLI you can access via `-h` / `--help`.
+//!
+//! It is also available as a library.
+//!
+//! # CLI Example
+//!
+//! ```bash
+//! osm-tile-downloader \
+//!   --north 50.811 \
+//!   --east 6.1649 \
+//!   --south 50.7492 \
+//!   --west 6.031 \
+//!   --url https://\{s\}.tile.openstreetmap.de/\{z\}/\{x\}/\{y\}.png \
+//!   --output ./tiles \
+//!   --rate 10
+//! ```
+//!
+//! # Library Example
+//! ```rust
+//! use osm_tile_downloader::{fetch, BoundingBox, Config};
+//! use std::path::Path;
+//!
+//! # #[tokio::main]
+//! # async fn main() {
+//! let config = Config {
+//!     bounding_box: BoundingBox::new_deg(50.811, 6.1649, 50.7492, 6.031),
+//!     fetch_rate: 10,
+//!     output_folder: Path::new("./tiles"),
+//!     request_retries_amount: 3,
+//!     url: "https://{s}.tile.openstreetmap.de/{z}/{x}/{y}.png",
+//!     timeout_secs: 30,
+//!     zoom_level: 10,
+//! };
+//!
+//! fetch(config).await.expect("failed fetching tiles");
+//! # }
+//! ```
+
 use anyhow::{Context, Result};
 use futures::{prelude::*, stream};
 use indicatif::ProgressBar;
@@ -20,6 +68,14 @@ use tokio::{
 
 const BACKOFF_DELAY: Duration = Duration::from_secs(10);
 
+/// A bounding box consisting of north, east, south and west coordinate boundaries
+/// given from 0 to 2π.
+///
+/// # Example
+/// ```rust
+/// # use osm_tile_downloader::BoundingBox;
+/// let aachen_germany = BoundingBox::new_deg(50.811, 6.1649, 50.7492, 6.031);
+/// ```
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub struct BoundingBox {
     north: f64,
@@ -28,6 +84,7 @@ pub struct BoundingBox {
     south: f64,
 }
 
+/// Tile fetching configuration.
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub struct Config<'a> {
     /// Bounding box in top, right, bottom, left order.
@@ -53,6 +110,7 @@ pub struct Config<'a> {
     pub zoom_level: u8,
 }
 
+/// An OSM slippy-map tile with x, y and z-coordinate.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct Tile {
     x: usize,
@@ -60,6 +118,35 @@ pub struct Tile {
     z: u8,
 }
 
+/// Asynchronously fetch the open street map tiles specified in `cfg` and save them
+/// to the file system.
+///
+/// Creates the required directories recursively and overwrites any existing files
+/// at the destination.
+///
+/// # Example
+/// ```rust
+/// use osm_tile_downloader::{fetch, BoundingBox, Config};
+/// # use std::path::Path;
+///
+/// # #[tokio::main]
+/// # async fn main() {
+/// let config = Config {
+///     bounding_box: BoundingBox::new_deg(50.811, 6.1649, 50.7492, 6.031),
+///     fetch_rate: 10,
+///     output_folder: Path::new("./tiles"),
+///     request_retries_amount: 3,
+///     url: "https://{s}.tile.openstreetmap.de/{z}/{x}/{y}.png",
+///     timeout_secs: 30,
+///     zoom_level: 10,
+/// };
+///
+/// fetch(config).await.expect("failed fetching tiles");
+/// # }
+/// ```
+///
+/// # Panics
+/// Panics if the specified output folder exists and is not a folder but a file.
 pub async fn fetch(cfg: Config<'_>) -> Result<()> {
     assert!(
         !cfg.output_folder.exists() || cfg.output_folder.is_dir(),
@@ -119,6 +206,16 @@ pub async fn fetch(cfg: Config<'_>) -> Result<()> {
 }
 
 impl BoundingBox {
+    /// Create a new bounding box from the specified coordinates specified in degrees (0-360°).
+    ///
+    /// # Example
+    /// ```rust
+    /// # use osm_tile_downloader::BoundingBox;
+    /// let aachen_germany = BoundingBox::new_deg(50.811, 6.1649, 50.7492, 6.031);
+    /// ```
+    ///
+    /// # Panics
+    /// Panics if the coordinates are < 0, or >= 360.
     pub fn new_deg(north: f64, east: f64, south: f64, west: f64) -> Self {
         Self::new(
             north.to_radians(),
@@ -128,6 +225,10 @@ impl BoundingBox {
         )
     }
 
+    /// Create a new bounding box from the specified coordinates specified in radians (0-2π).
+    ///
+    /// # Panics
+    /// Panics if the coordinates are < 0, or >= 2π.
     pub fn new(north: f64, east: f64, south: f64, west: f64) -> Self {
         assert!(north >= 0.0 && north < 2f64 * f64::consts::PI);
         assert!(east >= 0.0 && east < 2f64 * f64::consts::PI);
@@ -142,30 +243,31 @@ impl BoundingBox {
         }
     }
 
+    /// Gets the north coordinate.
     pub fn north(&self) -> f64 {
         self.north
     }
 
+    /// Gets the east coordinate.
     pub fn east(&self) -> f64 {
         self.east
     }
 
+    /// Gets the south coordinate.
     pub fn south(&self) -> f64 {
         self.south
     }
 
+    /// Gets the west coordinate.
     pub fn west(&self) -> f64 {
         self.west
     }
 
-    pub fn tuple(&self) -> (f64, f64, f64, f64) {
-        (self.north, self.east, self.south, self.west)
-    }
-
+    /// Creates an iterator iterating over all tiles in the bounding box.
     pub fn tiles(&self, upto_zoom: u8) -> impl Iterator<Item = Tile> + Debug {
         assert!(upto_zoom >= 1);
 
-        let (north, east, south, west) = self.tuple();
+        let (north, east, south, west) = (self.north, self.east, self.south, self.west);
 
         (1..=upto_zoom).flat_map(move |level| {
             let (top_x, top_y) = tile_indices(level, west, north);
@@ -179,12 +281,14 @@ impl BoundingBox {
 }
 
 impl Config<'_> {
+    /// Creates an iterator iterating over all tiles in the contained bounding box.
     pub fn tiles(&self) -> impl Iterator<Item = Tile> + Debug {
         self.bounding_box.tiles(self.zoom_level)
     }
 }
 
 impl Tile {
+    /// Fetches the given tile from the given URL using the given HTTP client.
     pub async fn fetch_from(
         self,
         client: &Client,
