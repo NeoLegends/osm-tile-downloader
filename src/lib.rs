@@ -264,6 +264,9 @@ impl BoundingBox {
     }
 
     /// Creates an iterator iterating over all tiles in the bounding box.
+    ///
+    /// # Panics
+    /// Panics if `upto_zoom` is 0.
     pub fn tiles(&self, upto_zoom: u8) -> impl Iterator<Item = Tile> + Debug {
         assert!(upto_zoom >= 1);
 
