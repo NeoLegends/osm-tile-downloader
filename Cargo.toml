@@ -1,6 +1,6 @@
 [package]
 name = "osm-tile-downloader"
-description = "Download tiles from an OSM tileserver"
+description = "Download tiles from an OpenStreetMap tileserver to the file system"
 version = "0.2.3"
 authors = ["Moritz Gunz <moritz.gunz@gmail.com>"]
 edition = "2018"
@@ -9,6 +9,7 @@ repository = "https://github.com/NeoLegends/osm-tile-downloader"
 keywords = ["open", "street", "map", "osm", "tile"]
 categories = ["command-line-utilities"]
 license = "MIT"
+readme = "README.md"
 
 [dependencies]
 anyhow = "1.0.28"
