@@ -67,6 +67,7 @@ use tokio::{
 };
 
 const BACKOFF_DELAY: Duration = Duration::from_secs(10);
+const ZERO_DURATION: Duration = Duration::from_secs(0);
 
 /// A bounding box consisting of north, east, south and west coordinate boundaries
 /// given from 0 to 2π.
@@ -104,7 +105,9 @@ pub struct Config<'a> {
     pub url: &'a str,
 
     /// Timeout for fetching a single tile.
-    pub timeout_secs: u64,
+    ///
+    /// Pass the zero duration to disable the timeout.
+    pub timeout: Duration,
 
     /// The zoom level to download to.
     pub zoom_level: u8,
@@ -162,8 +165,8 @@ pub async fn fetch(cfg: Config<'_>) -> Result<()> {
     let pb = ProgressBar::new(cfg.tiles().count() as u64);
 
     let mut builder = Client::builder();
-    if cfg.timeout_secs > 0 {
-        builder = builder.timeout(Duration::from_secs(cfg.timeout_secs));
+    if cfg.timeout > ZERO_DURATION {
+        builder = builder.timeout(cfg.timeout);
     }
 
     let client = builder
@@ -270,7 +273,8 @@ impl BoundingBox {
     pub fn tiles(&self, upto_zoom: u8) -> impl Iterator<Item = Tile> + Debug {
         assert!(upto_zoom >= 1);
 
-        let (north, east, south, west) = (self.north, self.east, self.south, self.west);
+        let (north, east, south, west) =
+            (self.north, self.east, self.south, self.west);
 
         (1..=upto_zoom).flat_map(move |level| {
             let (top_x, top_y) = tile_indices(level, west, north);

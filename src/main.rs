@@ -3,7 +3,7 @@ use clap::{
     app_from_crate, crate_authors, crate_description, crate_name, crate_version,
     AppSettings, Arg,
 };
-use std::{f64, path::Path, str::FromStr};
+use std::{f64, path::Path, str::FromStr, time::Duration};
 
 use osm_tile_downloader::*;
 
@@ -156,7 +156,9 @@ async fn main() -> Result<()> {
             .parse()
             .unwrap(),
         url: matches.value_of(URL_ARG).unwrap(),
-        timeout_secs: matches.value_of(TIMEOUT_ARG).unwrap().parse().unwrap(),
+        timeout: Duration::from_secs(
+            matches.value_of(TIMEOUT_ARG).unwrap().parse().unwrap(),
+        ),
         zoom_level: matches.value_of(UP_TO_ZOOM_ARG).unwrap().parse().unwrap(),
     };
 
