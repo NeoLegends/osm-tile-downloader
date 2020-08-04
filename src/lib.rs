@@ -39,7 +39,7 @@
 //!     request_retries_amount: 3,
 //!     url: "https://{s}.tile.openstreetmap.de/{z}/{x}/{y}.png",
 //!     timeout_secs: 30,
-//!     zoom_level: 10,
+//!     max_zoom: 10,
 //! };
 //!
 //! fetch(config).await.expect("failed fetching tiles");
@@ -91,6 +91,9 @@ pub struct Config<'a> {
     /// Bounding box in top, right, bottom, left order.
     pub bounding_box: BoundingBox,
 
+    /// Whether to skip tiles that are already downloaded.
+    pub fetch_existing: bool,
+
     /// Maximum number of parallel downloads.
     pub fetch_rate: u8,
 
@@ -109,8 +112,11 @@ pub struct Config<'a> {
     /// Pass the zero duration to disable the timeout.
     pub timeout: Duration,
 
-    /// The zoom level to download to.
-    pub zoom_level: u8,
+    /// The minimum zoom level to download to.
+    pub min_zoom: u8,
+
+    /// The maximum zoom level to download to.
+    pub max_zoom: u8,
 }
 
 /// An OSM slippy-map tile with x, y and z-coordinate.
@@ -141,7 +147,7 @@ pub struct Tile {
 ///     request_retries_amount: 3,
 ///     url: "https://{s}.tile.openstreetmap.de/{z}/{x}/{y}.png",
 ///     timeout_secs: 30,
-///     zoom_level: 10,
+///     max_zoom: 10,
 /// };
 ///
 /// fetch(config).await.expect("failed fetching tiles");
@@ -169,7 +175,14 @@ pub async fn fetch(cfg: Config<'_>) -> Result<()> {
         builder = builder.timeout(cfg.timeout);
     }
 
+    let mut headers = reqwest::header::HeaderMap::new();
+    headers.append(
+        reqwest::header::USER_AGENT,
+        "osm-tile-downloader_rs_0.2.4".parse().unwrap(),
+    );
+
     let client = builder
+        .default_headers(headers)
         .build()
         .with_context(|| "failed creating HTTP client")?;
 
@@ -182,7 +195,12 @@ pub async fn fetch(cfg: Config<'_>) -> Result<()> {
 
                 for _ in 0..cfg.request_retries_amount {
                     res = tile
-                        .fetch_from(&http_client, cfg.url, cfg.output_folder)
+                        .fetch_from(
+                            &http_client,
+                            cfg.url,
+                            cfg.output_folder,
+                            cfg.fetch_existing,
+                        )
                         .await;
 
                     if res.is_ok() {
@@ -209,7 +227,8 @@ pub async fn fetch(cfg: Config<'_>) -> Result<()> {
 }
 
 impl BoundingBox {
-    /// Create a new bounding box from the specified coordinates specified in degrees (0-360°).
+    /// Create a new bounding box from the specified coordinates specified in degrees
+    /// (-180(E) to 180(W)° latitude, -85(S) to 85(N)° longitude).
     ///
     /// # Example
     /// ```rust
@@ -218,7 +237,7 @@ impl BoundingBox {
     /// ```
     ///
     /// # Panics
-    /// Panics if the coordinates are < 0, or >= 360.
+    /// Panics if the coordinates aren't in the closed range [-180, 180].
     pub fn new_deg(north: f64, east: f64, south: f64, west: f64) -> Self {
         Self::new(
             north.to_radians(),
@@ -231,12 +250,12 @@ impl BoundingBox {
     /// Create a new bounding box from the specified coordinates specified in radians (0-2π).
     ///
     /// # Panics
-    /// Panics if the coordinates are < 0, or >= 2π.
+    /// Panics if the coordinates aren't in the closed range [-π, π].
     pub fn new(north: f64, east: f64, south: f64, west: f64) -> Self {
-        assert!(north >= 0.0 && north < 2f64 * f64::consts::PI);
-        assert!(east >= 0.0 && east < 2f64 * f64::consts::PI);
-        assert!(south >= 0.0 && south < 2f64 * f64::consts::PI);
-        assert!(west >= 0.0 && west < 2f64 * f64::consts::PI);
+        assert!(north >= -1f64 * f64::consts::PI && north <= f64::consts::PI);
+        assert!(east >= -1f64 * f64::consts::PI && east <= f64::consts::PI);
+        assert!(south >= -1f64 * f64::consts::PI && south <= f64::consts::PI);
+        assert!(west >= -1f64 * f64::consts::PI && west <= f64::consts::PI);
 
         BoundingBox {
             north,
@@ -269,16 +288,32 @@ impl BoundingBox {
     /// Creates an iterator iterating over all tiles in the bounding box.
     ///
     /// # Panics
-    /// Panics if `upto_zoom` is 0.
-    pub fn tiles(&self, upto_zoom: u8) -> impl Iterator<Item = Tile> + Debug {
-        assert!(upto_zoom >= 1);
+    /// Panics if `min_zoom` or `max_zoom` are invalid.
+    pub fn tiles(
+        &self,
+        min_zoom: u8,
+        max_zoom: u8,
+    ) -> impl Iterator<Item = Tile> + Debug {
+        assert!(min_zoom >= 1);
+        assert!(max_zoom >= 1);
+        assert!(min_zoom <= max_zoom);
 
         let (north, east, south, west) =
             (self.north, self.east, self.south, self.west);
 
-        (1..=upto_zoom).flat_map(move |level| {
-            let (top_x, top_y) = tile_indices(level, west, north);
-            let (bot_x, bot_y) = tile_indices(level, east, south);
+        (min_zoom..=max_zoom).flat_map(move |level| {
+            let (mut top_x, mut top_y) = tile_indices(level, west, north);
+            let (mut bot_x, mut bot_y) = tile_indices(level, east, south);
+
+            // TODO: this can probably be improved
+            // swap top/bot if they're out of order
+            if top_x > bot_x {
+                std::mem::swap(&mut top_x, &mut bot_x);
+            }
+
+            if top_y > bot_y {
+                std::mem::swap(&mut top_y, &mut bot_y);
+            }
 
             (top_x..=bot_x).flat_map(move |x| {
                 (top_y..=bot_y).map(move |y| Tile { x, y, z: level })
@@ -290,7 +325,7 @@ impl BoundingBox {
 impl Config<'_> {
     /// Creates an iterator iterating over all tiles in the contained bounding box.
     pub fn tiles(&self) -> impl Iterator<Item = Tile> + Debug {
-        self.bounding_box.tiles(self.zoom_level)
+        self.bounding_box.tiles(self.min_zoom, self.max_zoom)
     }
 }
 
@@ -301,6 +336,7 @@ impl Tile {
         client: &Client,
         url_fmt: &str,
         output_folder: &Path,
+        fetch_existing: bool,
     ) -> Result<()> {
         const OSM_SERVERS: &[&'static str] = &["a", "b", "c"];
 
@@ -319,6 +355,25 @@ impl Tile {
 
             strfmt::strfmt(url_fmt, &map).context("failed formatting URL")?
         };
+
+        let output_file = {
+            let mut target = output_folder.join(self.z.to_string());
+            target.push(self.x.to_string());
+            fs::create_dir_all(&target).await.with_context(|| {
+                format!(
+                    "failed creating output directory for tile {}x{}x{}",
+                    self.x, self.y, self.z
+                )
+            })?;
+            target.push(format!("{}.png", self.y));
+
+            target
+        };
+
+        // if the tile's already been downloaded, skip it
+        if !fetch_existing && output_file.exists() {
+            return Ok(());
+        }
 
         let mut response_reader = loop {
             let raw_response =
@@ -353,20 +408,7 @@ impl Tile {
             break io::stream_reader(response_stream);
         };
 
-        let mut output_file = {
-            let mut target = output_folder.join(self.z.to_string());
-            target.push(self.x.to_string());
-            fs::create_dir_all(&target).await.with_context(|| {
-                format!(
-                    "failed creating output directory for tile {}x{}x{}",
-                    self.x, self.y, self.z
-                )
-            })?;
-            target.push(self.y.to_string());
-
-            File::create(target).await?
-        };
-
+        let mut output_file = File::create(output_file).await?;
         io::copy(&mut response_reader, &mut output_file)
             .await
             .with_context(|| {
@@ -380,22 +422,19 @@ impl Tile {
     }
 }
 
+// Given a zoom and lat/lon in radians, return the tile X/Y/Z coords
+// https://wiki.openstreetmap.org/wiki/Slippy_map_tilenames#Implementations
 fn tile_indices(zoom: u8, lon_rad: f64, lat_rad: f64) -> (usize, usize) {
     assert!(zoom > 0);
-    assert!(lon_rad >= 0.0);
-    assert!(lat_rad >= 0.0);
+    // TODO: lon_deg can only go from -85 <-> 85
+    assert!(lon_rad >= -1f64 * f64::consts::PI && lon_rad <= f64::consts::PI);
+    assert!(lat_rad >= -1f64 * f64::consts::PI && lat_rad <= f64::consts::PI);
 
-    let tile_x = {
-        let deg = (lon_rad + f64::consts::PI) / (2f64 * f64::consts::PI);
+    let n = 2f64.powi(zoom as i32);
+    let lon_deg = lon_rad * 180f64 / f64::consts::PI;
 
-        deg * 2f64.powi(zoom as i32)
-    };
-    let tile_y = {
-        let trig = (lat_rad.tan() + (1f64 / lat_rad.cos())).ln();
-        let inner = 1f64 - (trig / f64::consts::PI);
-
-        inner * 2f64.powi(zoom as i32 - 1)
-    };
+    let tile_x = (lon_deg + 180f64) / 360f64 * n;
+    let tile_y = (1f64 - lat_rad.tan().asinh() / f64::consts::PI) / 2f64 * n;
 
     (tile_x as usize, tile_y as usize)
 }

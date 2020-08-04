@@ -1,11 +1,14 @@
+mod validators;
+
 use anyhow::Result;
 use clap::{
     app_from_crate, crate_authors, crate_description, crate_name, crate_version,
     AppSettings, Arg,
 };
-use std::{f64, path::Path, str::FromStr, time::Duration};
+use std::{path::Path, time::Duration};
 
 use osm_tile_downloader::*;
+use validators::*;
 
 const BBOX_NORTH_ARG: &str = "BBOX_NORTH";
 const BBOX_SOUTH_ARG: &str = "BBOX_SOUTH";
@@ -14,37 +17,15 @@ const BBOX_EAST_ARG: &str = "BBOX_EAST";
 const OUTPUT_ARG: &str = "OUTPUT";
 const PARALLEL_FETCHES_ARG: &str = "PARALLEL_FETCHES";
 const REQUEST_RETRIES_ARG: &str = "REQUEST_RETRIES";
-const UP_TO_ZOOM_ARG: &str = "UP_TO_ZOOM";
+const ZOOM_ARG: &str = "ZOOM";
+const MIN_ZOOM_ARG: &str = "MIN_ZOOM";
+const MAX_ZOOM_ARG: &str = "MAX_ZOOM";
 const URL_ARG: &str = "URL";
 const TIMEOUT_ARG: &str = "TIMEOUT";
+const FETCH_EXISTING: &str = "FETCH_EXISTING";
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    fn is_numeric<T: FromStr>(v: String) -> Result<(), String> {
-        v.parse::<T>()
-            .map(|_| ())
-            .map_err(|_| "must be numeric".to_owned())
-    }
-    fn is_positive_u8(v: String) -> Result<(), String> {
-        let val = v.parse::<u8>().map_err(|_| "must be numeric".to_owned())?;
-        if val > 0 {
-            Ok(())
-        } else {
-            Err("must be > 0".to_owned())
-        }
-    }
-    fn is_geo_coord(v: String) -> Result<(), String> {
-        let val = v.parse::<f64>().map_err(|_| "must be numeric".to_owned())?;
-
-        if val < 0f64 {
-            return Err("must be >= 0°".to_owned());
-        } else if val >= 360f64 {
-            return Err("must be < 360°".to_owned());
-        }
-
-        Ok(())
-    }
-
     let matches = app_from_crate!()
         .setting(AppSettings::GlobalVersion)
         .setting(AppSettings::VersionlessSubcommands)
@@ -54,6 +35,7 @@ async fn main() -> Result<()> {
                 .validator(is_geo_coord)
                 .required(true)
                 .takes_value(true)
+                .allow_hyphen_values(true)
                 .short("n")
                 .long("north"),
         )
@@ -63,6 +45,7 @@ async fn main() -> Result<()> {
                 .validator(is_geo_coord)
                 .required(true)
                 .takes_value(true)
+                .allow_hyphen_values(true)
                 .short("s")
                 .long("south"),
         )
@@ -72,6 +55,7 @@ async fn main() -> Result<()> {
                 .validator(is_geo_coord)
                 .required(true)
                 .takes_value(true)
+                .allow_hyphen_values(true)
                 .short("e")
                 .long("east"),
         )
@@ -81,6 +65,7 @@ async fn main() -> Result<()> {
                 .validator(is_geo_coord)
                 .required(true)
                 .takes_value(true)
+                .allow_hyphen_values(true)
                 .short("w")
                 .long("west"),
         )
@@ -111,13 +96,28 @@ async fn main() -> Result<()> {
                 .long("timeout"),
         )
         .arg(
-            Arg::with_name(UP_TO_ZOOM_ARG)
+            Arg::with_name(MIN_ZOOM_ARG)
+                .help("The minimum zoom level to fetch")
+                .validator(is_positive_u8)
+                .default_value("1")
+                .takes_value(true)
+                .long("min-zoom"),
+        )
+        .arg(
+            Arg::with_name(MAX_ZOOM_ARG)
                 .help("The maximum zoom level to fetch")
-                .validator(is_numeric::<u8>)
+                .validator(is_positive_u8)
                 .default_value("18")
                 .takes_value(true)
-                .short("z")
-                .long("zoom"),
+                .long("max-zoom"),
+        )
+        .arg(
+            Arg::with_name(ZOOM_ARG)
+            .help("Only fetch a single zoom level (implies min=x/max=x)")
+            .validator(is_positive_u8)
+            .takes_value(true)
+            .long("zoom")
+            .short("z")
         )
         .arg(
             Arg::with_name(OUTPUT_ARG)
@@ -135,15 +135,38 @@ async fn main() -> Result<()> {
                 .short("u")
                 .long("url")
         )
+        .arg(
+            Arg::with_name(FETCH_EXISTING)
+            .help("Fetch tiles that we've already downloaded (this usually isn't required)")
+            .required(false)
+            .takes_value(false)
+            .long("fetch-existing")
+        )
         .get_matches();
 
-    let config = Config {
-        bounding_box: BoundingBox::new_deg(
-            matches.value_of(BBOX_NORTH_ARG).unwrap().parse().unwrap(),
-            matches.value_of(BBOX_EAST_ARG).unwrap().parse().unwrap(),
-            matches.value_of(BBOX_SOUTH_ARG).unwrap().parse().unwrap(),
-            matches.value_of(BBOX_WEST_ARG).unwrap().parse().unwrap(),
+    let (min_zoom, max_zoom) = match matches.value_of(ZOOM_ARG) {
+        Some(val) => {
+            let zoom = val.parse().unwrap();
+            (zoom, zoom)
+        }
+        None => (
+            matches.value_of(MIN_ZOOM_ARG).unwrap().parse().unwrap(),
+            matches.value_of(MAX_ZOOM_ARG).unwrap().parse().unwrap(),
         ),
+    };
+
+    let bounding_box = BoundingBox::new_deg(
+        matches.value_of(BBOX_NORTH_ARG).unwrap().parse().unwrap(),
+        matches.value_of(BBOX_EAST_ARG).unwrap().parse().unwrap(),
+        matches.value_of(BBOX_SOUTH_ARG).unwrap().parse().unwrap(),
+        matches.value_of(BBOX_WEST_ARG).unwrap().parse().unwrap(),
+    );
+
+    let config = Config {
+        min_zoom,
+        max_zoom,
+        bounding_box,
+        fetch_existing: matches.is_present(FETCH_EXISTING),
         fetch_rate: matches
             .value_of(PARALLEL_FETCHES_ARG)
             .unwrap()
@@ -159,7 +182,6 @@ async fn main() -> Result<()> {
         timeout: Duration::from_secs(
             matches.value_of(TIMEOUT_ARG).unwrap().parse().unwrap(),
         ),
-        zoom_level: matches.value_of(UP_TO_ZOOM_ARG).unwrap().parse().unwrap(),
     };
 
     fetch(config).await?;
