@@ -66,6 +66,8 @@ use tokio::{
     io, time,
 };
 
+const CRATE_VERSION: &str = env!("CARGO_PKG_VERSION");
+
 const BACKOFF_DELAY: Duration = Duration::from_secs(10);
 const ZERO_DURATION: Duration = Duration::from_secs(0);
 
@@ -178,7 +180,9 @@ pub async fn fetch(cfg: Config<'_>) -> Result<()> {
     let mut headers = reqwest::header::HeaderMap::new();
     headers.append(
         reqwest::header::USER_AGENT,
-        "osm-tile-downloader_rs_0.2.4".parse().unwrap(),
+        format!("osm-tile-downloader_rs_{}", CRATE_VERSION)
+            .parse()
+            .unwrap(),
     );
 
     let client = builder
