@@ -22,7 +22,8 @@ const MIN_ZOOM_ARG: &str = "MIN_ZOOM";
 const MAX_ZOOM_ARG: &str = "MAX_ZOOM";
 const URL_ARG: &str = "URL";
 const TIMEOUT_ARG: &str = "TIMEOUT";
-const FETCH_EXISTING: &str = "FETCH_EXISTING";
+const FETCH_EXISTING_ARG: &str = "FETCH_EXISTING";
+const DRY_RUN_ARG: &str = "DRY_RUN";
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -113,11 +114,11 @@ async fn main() -> Result<()> {
         )
         .arg(
             Arg::with_name(ZOOM_ARG)
-            .help("Only fetch a single zoom level (implies min=x/max=x)")
-            .validator(is_positive_u8)
-            .takes_value(true)
-            .long("zoom")
-            .short("z")
+                .help("Only fetch a single zoom level (implies min=x/max=x)")
+                .validator(is_positive_u8)
+                .takes_value(true)
+                .long("zoom")
+                .short("z")
         )
         .arg(
             Arg::with_name(OUTPUT_ARG)
@@ -136,11 +137,18 @@ async fn main() -> Result<()> {
                 .long("url")
         )
         .arg(
-            Arg::with_name(FETCH_EXISTING)
-            .help("Fetch tiles that we've already downloaded (this usually isn't required)")
-            .required(false)
-            .takes_value(false)
-            .long("fetch-existing")
+            Arg::with_name(FETCH_EXISTING_ARG)
+                .help("Fetch tiles that we've already downloaded (this usually isn't required)")
+                .required(false)
+                .takes_value(false)
+                .long("fetch-existing")
+        )
+        .arg(
+            Arg::with_name(DRY_RUN_ARG)
+                .help("Don't actually fetch anything, just determine how many tiles would be fetched.")
+                .required(false)
+                .takes_value(false)
+                .long("dry-run")
         )
         .get_matches();
 
@@ -162,28 +170,40 @@ async fn main() -> Result<()> {
         matches.value_of(BBOX_WEST_ARG).unwrap().parse().unwrap(),
     );
 
-    let config = Config {
-        min_zoom,
-        max_zoom,
-        bounding_box,
-        fetch_existing: matches.is_present(FETCH_EXISTING),
-        fetch_rate: matches
-            .value_of(PARALLEL_FETCHES_ARG)
-            .unwrap()
-            .parse()
-            .unwrap(),
-        output_folder: Path::new(matches.value_of(OUTPUT_ARG).unwrap()),
-        request_retries_amount: matches
-            .value_of(REQUEST_RETRIES_ARG)
-            .unwrap()
-            .parse()
-            .unwrap(),
-        url: matches.value_of(URL_ARG).unwrap(),
-        timeout: Duration::from_secs(
-            matches.value_of(TIMEOUT_ARG).unwrap().parse().unwrap(),
-        ),
-    };
+    let dry_run = matches.is_present(DRY_RUN_ARG);
 
-    fetch(config).await?;
+    if dry_run {
+        let tile_count = bounding_box.tiles(min_zoom, max_zoom).count();
+        eprintln!(
+            "would download {} tiles (approx {}, assuming 10 kb per tile)",
+            tile_count,
+            pretty_bytes::converter::convert((tile_count as f64) * 10_000f64)
+        );
+    } else {
+        let config = Config {
+            min_zoom,
+            max_zoom,
+            bounding_box,
+            fetch_existing: matches.is_present(FETCH_EXISTING_ARG),
+            fetch_rate: matches
+                .value_of(PARALLEL_FETCHES_ARG)
+                .unwrap()
+                .parse()
+                .unwrap(),
+            output_folder: Path::new(matches.value_of(OUTPUT_ARG).unwrap()),
+            request_retries_amount: matches
+                .value_of(REQUEST_RETRIES_ARG)
+                .unwrap()
+                .parse()
+                .unwrap(),
+            url: matches.value_of(URL_ARG).unwrap(),
+            timeout: Duration::from_secs(
+                matches.value_of(TIMEOUT_ARG).unwrap().parse().unwrap(),
+            ),
+        };
+
+        fetch(config).await?;
+    }
+
     Ok(())
 }
