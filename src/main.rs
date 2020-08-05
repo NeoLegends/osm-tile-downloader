@@ -10,20 +10,21 @@ use std::{path::Path, time::Duration};
 use osm_tile_downloader::*;
 use validators::*;
 
-const BBOX_NORTH_ARG: &str = "BBOX_NORTH";
-const BBOX_SOUTH_ARG: &str = "BBOX_SOUTH";
-const BBOX_WEST_ARG: &str = "BBOX_WEST";
-const BBOX_EAST_ARG: &str = "BBOX_EAST";
-const OUTPUT_ARG: &str = "OUTPUT";
-const PARALLEL_FETCHES_ARG: &str = "PARALLEL_FETCHES";
-const REQUEST_RETRIES_ARG: &str = "REQUEST_RETRIES";
-const ZOOM_ARG: &str = "ZOOM";
-const MIN_ZOOM_ARG: &str = "MIN_ZOOM";
-const MAX_ZOOM_ARG: &str = "MAX_ZOOM";
-const URL_ARG: &str = "URL";
-const TIMEOUT_ARG: &str = "TIMEOUT";
-const FETCH_EXISTING_ARG: &str = "FETCH_EXISTING";
-const DRY_RUN_ARG: &str = "DRY_RUN";
+const BBOX_NORTH_ARG: &str = "north";
+const BBOX_SOUTH_ARG: &str = "south";
+const BBOX_WEST_ARG: &str = "west";
+const BBOX_EAST_ARG: &str = "east";
+const BBOX_FIXTURE_ARG: &str = "fixture";
+const OUTPUT_ARG: &str = "output";
+const PARALLEL_FETCHES_ARG: &str = "num_parallel";
+const REQUEST_RETRIES_ARG: &str = "num_retries";
+const ZOOM_ARG: &str = "zoom";
+const MIN_ZOOM_ARG: &str = "min_zoom";
+const MAX_ZOOM_ARG: &str = "max_zoom";
+const URL_ARG: &str = "url";
+const TIMEOUT_ARG: &str = "timeout";
+const FETCH_EXISTING_ARG: &str = "should_fetch_existing";
+const DRY_RUN_ARG: &str = "dry_run";
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -33,8 +34,8 @@ async fn main() -> Result<()> {
         .arg(
             Arg::with_name(BBOX_NORTH_ARG)
                 .help("Latitude of north bounding box boundary (in degrees)")
+                .required_unless(BBOX_FIXTURE_ARG)
                 .validator(is_geo_coord)
-                .required(true)
                 .takes_value(true)
                 .allow_hyphen_values(true)
                 .short("n")
@@ -43,8 +44,8 @@ async fn main() -> Result<()> {
         .arg(
             Arg::with_name(BBOX_SOUTH_ARG)
                 .help("Latitude of south bounding box boundary (in degrees)")
+                .required_unless(BBOX_FIXTURE_ARG)
                 .validator(is_geo_coord)
-                .required(true)
                 .takes_value(true)
                 .allow_hyphen_values(true)
                 .short("s")
@@ -53,8 +54,8 @@ async fn main() -> Result<()> {
         .arg(
             Arg::with_name(BBOX_EAST_ARG)
                 .help("Longitude of east bounding box boundary (in degrees)")
+                .required_unless(BBOX_FIXTURE_ARG)
                 .validator(is_geo_coord)
-                .required(true)
                 .takes_value(true)
                 .allow_hyphen_values(true)
                 .short("e")
@@ -63,12 +64,20 @@ async fn main() -> Result<()> {
         .arg(
             Arg::with_name(BBOX_WEST_ARG)
                 .help("Longitude of west bounding box boundary (in degrees)")
+                .required_unless(BBOX_FIXTURE_ARG)
                 .validator(is_geo_coord)
-                .required(true)
                 .takes_value(true)
                 .allow_hyphen_values(true)
                 .short("w")
                 .long("west"),
+        )
+        .arg(
+            Arg::with_name(BBOX_FIXTURE_ARG)
+                .help("Use a known, named bounding box (eg. USA)")
+                .validator(is_bb_fixture)
+                .takes_value(true)
+                .short("f")
+                .long("fixture"),
         )
         .arg(
             Arg::with_name(PARALLEL_FETCHES_ARG)
@@ -163,12 +172,18 @@ async fn main() -> Result<()> {
         ),
     };
 
-    let bounding_box = BoundingBox::new_deg(
-        matches.value_of(BBOX_NORTH_ARG).unwrap().parse().unwrap(),
-        matches.value_of(BBOX_EAST_ARG).unwrap().parse().unwrap(),
-        matches.value_of(BBOX_SOUTH_ARG).unwrap().parse().unwrap(),
-        matches.value_of(BBOX_WEST_ARG).unwrap().parse().unwrap(),
-    );
+    let bounding_box = match matches.value_of(BBOX_FIXTURE_ARG) {
+        Some(f) => {
+            let fixture = f.parse::<BoundingBoxFixture>().unwrap();
+            BoundingBox::new_fixture(fixture)
+        }
+        None => BoundingBox::new_deg(
+            matches.value_of(BBOX_NORTH_ARG).unwrap().parse().unwrap(),
+            matches.value_of(BBOX_EAST_ARG).unwrap().parse().unwrap(),
+            matches.value_of(BBOX_SOUTH_ARG).unwrap().parse().unwrap(),
+            matches.value_of(BBOX_WEST_ARG).unwrap().parse().unwrap(),
+        ),
+    };
 
     let dry_run = matches.is_present(DRY_RUN_ARG);
 

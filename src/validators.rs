@@ -26,3 +26,11 @@ pub(crate) fn is_geo_coord(v: String) -> Result<(), String> {
 
     Ok(())
 }
+
+pub(crate) fn is_bb_fixture(v: String) -> Result<(), String> {
+    if v.to_lowercase().starts_with("us") {
+        return Ok(());
+    }
+
+    Err("US is the only supported fixture".to_owned())
+}

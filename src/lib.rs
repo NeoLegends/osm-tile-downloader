@@ -230,6 +230,22 @@ pub async fn fetch(cfg: Config<'_>) -> Result<()> {
     Ok(())
 }
 
+pub enum BoundingBoxFixture {
+    USA,
+}
+
+impl std::str::FromStr for BoundingBoxFixture {
+    type Err = &'static str;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if s.to_lowercase().starts_with("us") {
+            return Ok(BoundingBoxFixture::USA);
+        }
+
+        Err("unrecognized fixture")
+    }
+}
+
 impl BoundingBox {
     /// Create a new bounding box from the specified coordinates specified in degrees
     /// (-180(E) to 180(W)° latitude, -85(S) to 85(N)° longitude).
@@ -266,6 +282,14 @@ impl BoundingBox {
             east,
             south,
             west,
+        }
+    }
+
+    pub fn new_fixture(fixture: BoundingBoxFixture) -> Self {
+        match fixture {
+            BoundingBoxFixture::USA => {
+                Self::new_deg(49.4325, -65.7421, 23.8991, -125.3321)
+            }
         }
     }
 
