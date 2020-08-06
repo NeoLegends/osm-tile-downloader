@@ -71,7 +71,7 @@ impl Args {
 
         let bounding_box = match matches.value_of(BBOX_FIXTURE_ARG) {
             // if a fixture is specified, construct the bounding box from that
-            Some(f) => BoundingBox::from_fixture(f.parse::<Fixture>().unwrap()),
+            Some(f) => f.parse::<Fixture>().unwrap().into(),
             // otherwise, parse the 4 coords separately
             None => BoundingBox::new_deg(
                 matches.value_of(BBOX_NORTH_ARG).unwrap().parse().unwrap(),

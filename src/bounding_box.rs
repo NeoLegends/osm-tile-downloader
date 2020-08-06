@@ -58,16 +58,6 @@ impl BoundingBox {
         }
     }
 
-    /// Create a new bounding box from the given fixture.
-    pub fn from_fixture(fixture: Fixture) -> Self {
-        use Fixture::*;
-
-        match fixture {
-            USA => Self::new_deg(49.4325, -65.7421, 23.8991, -125.3321),
-            AachenGermany => Self::new_deg(50.811, 6.1649, 50.7492, 6.031),
-        }
-    }
-
     /// Creates an iterator iterating over all tiles in the bounding box.
     ///
     /// # Panics
@@ -116,5 +106,16 @@ impl std::str::FromStr for Fixture {
         }
 
         Err("unrecognized fixture")
+    }
+}
+
+impl std::convert::From<Fixture> for BoundingBox {
+    fn from(fixture: Fixture) -> Self {
+        use Fixture::*;
+
+        match fixture {
+            USA => Self::new_deg(49.4325, -65.7421, 23.8991, -125.3321),
+            AachenGermany => Self::new_deg(50.811, 6.1649, 50.7492, 6.031),
+        }
     }
 }
