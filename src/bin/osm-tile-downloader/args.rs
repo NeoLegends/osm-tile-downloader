@@ -1,34 +1,119 @@
-mod validators;
-
-use anyhow::Result;
 use clap::{
     app_from_crate, crate_authors, crate_description, crate_name, crate_version,
-    AppSettings, Arg,
+    AppSettings, Arg, ArgMatches,
 };
-use std::{path::Path, time::Duration};
+use std::{path::PathBuf, time::Duration};
 
-use osm_tile_downloader::*;
-use validators::*;
+use crate::validators::*;
+use osm_tile_downloader::{BoundingBox, Config, Fixture, UrlFormat};
 
+const URL_ARG: &str = "url";
+const ZOOM_ARG: &str = "zoom";
+const OUTPUT_DIR_ARG: &str = "output_dir";
+const BBOX_FIXTURE_ARG: &str = "fixture";
 const BBOX_NORTH_ARG: &str = "north";
 const BBOX_SOUTH_ARG: &str = "south";
 const BBOX_WEST_ARG: &str = "west";
 const BBOX_EAST_ARG: &str = "east";
-const BBOX_FIXTURE_ARG: &str = "fixture";
-const OUTPUT_ARG: &str = "output";
-const PARALLEL_FETCHES_ARG: &str = "num_parallel";
-const REQUEST_RETRIES_ARG: &str = "num_retries";
-const ZOOM_ARG: &str = "zoom";
 const MIN_ZOOM_ARG: &str = "min_zoom";
 const MAX_ZOOM_ARG: &str = "max_zoom";
-const URL_ARG: &str = "url";
 const TIMEOUT_ARG: &str = "timeout";
-const FETCH_EXISTING_ARG: &str = "should_fetch_existing";
 const DRY_RUN_ARG: &str = "dry_run";
+const REQUEST_RETRIES_ARG: &str = "num_retries";
+const PARALLEL_FETCHES_ARG: &str = "num_parallel";
+const FETCH_EXISTING_ARG: &str = "should_fetch_existing";
 
-#[tokio::main]
-async fn main() -> Result<()> {
-    let matches = app_from_crate!()
+pub struct Args {
+    pub bounding_box: BoundingBox,
+    pub parallel_fetches: u8,
+    pub retries: u8,
+    pub timeout: Duration,
+    pub min_zoom: u8,
+    pub max_zoom: u8,
+    pub output_dir: PathBuf,
+    pub url: String,
+    pub fetch_existing: bool,
+    pub dry_run: bool,
+}
+
+impl std::convert::From<Args> for Config {
+    fn from(args: Args) -> Self {
+        Self {
+            bounding_box: args.bounding_box,
+            fetch_existing: args.fetch_existing,
+            fetch_rate: args.parallel_fetches,
+            output_folder: args.output_dir,
+            request_retries_amount: args.retries,
+            url: UrlFormat::from_str(args.url),
+            timeout: args.timeout,
+            min_zoom: args.min_zoom,
+            max_zoom: args.max_zoom,
+        }
+    }
+}
+
+impl Args {
+    pub fn parse() -> Self {
+        let matches = get_matches();
+
+        let (min_zoom, max_zoom) = match matches.value_of(ZOOM_ARG) {
+            // if `zoom` is set, use it for both min/max
+            Some(val) => {
+                let zoom = val.parse().unwrap();
+                (zoom, zoom)
+            }
+            // otherwise, parse min/max separately
+            None => (
+                matches.value_of(MIN_ZOOM_ARG).unwrap().parse().unwrap(),
+                matches.value_of(MAX_ZOOM_ARG).unwrap().parse().unwrap(),
+            ),
+        };
+
+        let bounding_box = match matches.value_of(BBOX_FIXTURE_ARG) {
+            // if a fixture is specified, construct the bounding box from that
+            Some(f) => BoundingBox::from_fixture(f.parse::<Fixture>().unwrap()),
+            // otherwise, parse the 4 coords separately
+            None => BoundingBox::new_deg(
+                matches.value_of(BBOX_NORTH_ARG).unwrap().parse().unwrap(),
+                matches.value_of(BBOX_EAST_ARG).unwrap().parse().unwrap(),
+                matches.value_of(BBOX_SOUTH_ARG).unwrap().parse().unwrap(),
+                matches.value_of(BBOX_WEST_ARG).unwrap().parse().unwrap(),
+            ),
+        };
+
+        let output_dir = {
+            let mut buf = PathBuf::new();
+            buf.push(matches.value_of(OUTPUT_DIR_ARG).unwrap());
+            buf
+        };
+
+        Self {
+            min_zoom,
+            max_zoom,
+            bounding_box,
+            output_dir,
+            parallel_fetches: matches
+                .value_of(PARALLEL_FETCHES_ARG)
+                .unwrap()
+                .parse()
+                .unwrap(),
+            retries: matches
+                .value_of(REQUEST_RETRIES_ARG)
+                .unwrap()
+                .parse()
+                .unwrap(),
+            timeout: Duration::from_secs(
+                matches.value_of(TIMEOUT_ARG).unwrap().parse().unwrap(),
+            ),
+            url: matches.value_of(URL_ARG).unwrap().to_owned(),
+            fetch_existing: matches.is_present(FETCH_EXISTING_ARG),
+            dry_run: matches.is_present(DRY_RUN_ARG),
+        }
+    }
+}
+
+fn get_matches() -> ArgMatches<'static> {
+    app_from_crate!()
         .setting(AppSettings::GlobalVersion)
         .setting(AppSettings::VersionlessSubcommands)
         .arg(
@@ -82,7 +167,7 @@ async fn main() -> Result<()> {
         .arg(
             Arg::with_name(PARALLEL_FETCHES_ARG)
                 .help("The amount of tiles fetched in parallel.")
-                .validator(is_positive_u8)
+                .validator(is_numeric_min(1))
                 .default_value("5")
                 .takes_value(true)
                 .short("r")
@@ -91,7 +176,7 @@ async fn main() -> Result<()> {
         .arg(
             Arg::with_name(REQUEST_RETRIES_ARG)
                 .help("The amount of times to retry a failed HTTP request.")
-                .validator(is_positive_u8)
+                .validator(is_numeric_min(0))
                 .default_value("3")
                 .takes_value(true)
                 .long("retries"),
@@ -99,7 +184,7 @@ async fn main() -> Result<()> {
         .arg(
             Arg::with_name(TIMEOUT_ARG)
                 .help("The timeout (in seconds) for fetching a single tile. Pass 0 for no timeout.")
-                .validator(is_numeric::<u64>)
+                .validator(is_numeric_min(0))
                 .default_value("10")
                 .takes_value(true)
                 .short("t")
@@ -108,7 +193,7 @@ async fn main() -> Result<()> {
         .arg(
             Arg::with_name(MIN_ZOOM_ARG)
                 .help("The minimum zoom level to fetch")
-                .validator(is_positive_u8)
+                .validator(is_numeric_min(1))
                 .default_value("1")
                 .takes_value(true)
                 .long("min-zoom"),
@@ -116,7 +201,7 @@ async fn main() -> Result<()> {
         .arg(
             Arg::with_name(MAX_ZOOM_ARG)
                 .help("The maximum zoom level to fetch")
-                .validator(is_positive_u8)
+                .validator(is_numeric_min(1))
                 .default_value("18")
                 .takes_value(true)
                 .long("max-zoom"),
@@ -124,13 +209,13 @@ async fn main() -> Result<()> {
         .arg(
             Arg::with_name(ZOOM_ARG)
                 .help("Only fetch a single zoom level (implies min=x/max=x)")
-                .validator(is_positive_u8)
+                .validator(is_numeric_min(1))
                 .takes_value(true)
                 .long("zoom")
                 .short("z")
         )
         .arg(
-            Arg::with_name(OUTPUT_ARG)
+            Arg::with_name(OUTPUT_DIR_ARG)
                 .help("The folder to output the tiles to. May contain format specifiers (and subfolders) to specify how the files will be laid out on disk.")
                 .default_value("output")
                 .takes_value(true)
@@ -159,66 +244,5 @@ async fn main() -> Result<()> {
                 .takes_value(false)
                 .long("dry-run")
         )
-        .get_matches();
-
-    let (min_zoom, max_zoom) = match matches.value_of(ZOOM_ARG) {
-        Some(val) => {
-            let zoom = val.parse().unwrap();
-            (zoom, zoom)
-        }
-        None => (
-            matches.value_of(MIN_ZOOM_ARG).unwrap().parse().unwrap(),
-            matches.value_of(MAX_ZOOM_ARG).unwrap().parse().unwrap(),
-        ),
-    };
-
-    let bounding_box = match matches.value_of(BBOX_FIXTURE_ARG) {
-        Some(f) => {
-            let fixture = f.parse::<BoundingBoxFixture>().unwrap();
-            BoundingBox::new_fixture(fixture)
-        }
-        None => BoundingBox::new_deg(
-            matches.value_of(BBOX_NORTH_ARG).unwrap().parse().unwrap(),
-            matches.value_of(BBOX_EAST_ARG).unwrap().parse().unwrap(),
-            matches.value_of(BBOX_SOUTH_ARG).unwrap().parse().unwrap(),
-            matches.value_of(BBOX_WEST_ARG).unwrap().parse().unwrap(),
-        ),
-    };
-
-    let dry_run = matches.is_present(DRY_RUN_ARG);
-
-    if dry_run {
-        let tile_count = bounding_box.tiles(min_zoom, max_zoom).count();
-        eprintln!(
-            "would download {} tiles (approx {}, assuming 10 kb per tile)",
-            tile_count,
-            pretty_bytes::converter::convert((tile_count as f64) * 10_000f64)
-        );
-    } else {
-        let config = Config {
-            min_zoom,
-            max_zoom,
-            bounding_box,
-            fetch_existing: matches.is_present(FETCH_EXISTING_ARG),
-            fetch_rate: matches
-                .value_of(PARALLEL_FETCHES_ARG)
-                .unwrap()
-                .parse()
-                .unwrap(),
-            output_folder: Path::new(matches.value_of(OUTPUT_ARG).unwrap()),
-            request_retries_amount: matches
-                .value_of(REQUEST_RETRIES_ARG)
-                .unwrap()
-                .parse()
-                .unwrap(),
-            url: matches.value_of(URL_ARG).unwrap(),
-            timeout: Duration::from_secs(
-                matches.value_of(TIMEOUT_ARG).unwrap().parse().unwrap(),
-            ),
-        };
-
-        fetch(config).await?;
-    }
-
-    Ok(())
+        .get_matches()
 }
