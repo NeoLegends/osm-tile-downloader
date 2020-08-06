@@ -44,7 +44,7 @@ impl std::convert::From<Args> for Config {
             fetch_rate: args.parallel_fetches,
             output_folder: args.output_dir,
             request_retries_amount: args.retries,
-            url: UrlFormat::from_str(args.url),
+            url: UrlFormat::from_string(args.url),
             timeout: args.timeout,
             min_zoom: args.min_zoom,
             max_zoom: args.max_zoom,

@@ -55,6 +55,7 @@ mod url;
 pub use bounding_box::{BoundingBox, Fixture};
 pub use config::Config;
 pub use fetch::fetch;
+pub use tile::Tile;
 pub use url::UrlFormat;
 
 // #[cfg(test)]

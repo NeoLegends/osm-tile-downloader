@@ -13,7 +13,7 @@ const LON_MIN: f64 = -1_f64 * PI;
 const LON_MAX: f64 = PI;
 
 /// An OSM slippy-map tile with x, y and z-coordinate.
-/// ref: https://wiki.openstreetmap.org/wiki/Slippy_map_tilenames
+/// [See More](https://wiki.openstreetmap.org/wiki/Slippy_map_tilenames)
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct Tile {
     pub x: usize,
@@ -22,10 +22,24 @@ pub struct Tile {
 }
 
 impl Tile {
+    /// Create a new tile from the given `x`, `y`, and `z` coordinates.
+    ///
+    /// Each `z` value (beginning at 1) represents a different zoom level
+    /// with its own unique tileset. `x` and `y` values increase as the
+    /// point moves down and to the right from the origin (0, 0) at the
+    /// top left.
+    ///
+    /// Each zoom layer contains `n ^ 2` tiles, where `n` is the zoom.
     pub fn new(x: usize, y: usize, z: u8) -> Self {
         Self { x, y, z }
     }
 
+    /// Create a new tile from the given latitude and longitude at the given
+    /// zoom level. Lat/lon should be provided in radians.
+    ///
+    /// # Panics
+    /// Panics if zoom is < 1, or if the given lat/lon values are outside
+    /// of the acceptable range.
     pub fn from_coords_and_zoom(lat_rad: f64, lon_rad: f64, zoom: u8) -> Self {
         assert!(zoom > 0);
         assert!(lat_rad >= LAT_MIN && lat_rad <= LAT_MAX);

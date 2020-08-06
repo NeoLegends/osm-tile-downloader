@@ -7,13 +7,48 @@ use crate::tile::Tile;
 
 const OSM_SERVERS: &[&str] = &["a", "b", "c"];
 
+/// A tile URL formatter. Tile URLs are allowed to contain any of
+/// the following tokens:
+///
+/// - `x`: the X coordinate of the tile
+/// - `y`: the Y coordinate of the tile
+/// - `z`: the Z coordinate (zoom level) of the tile
+/// - `s`: the subdomain, randomly chosen from `["a", "b", "c"]`
+///
+/// Subdomains (`{s}`) aren't required, but they help with parallel
+/// downloads. Format tokens should be surrounded by curly brackets.
+///
+/// # Example
+/// ```rust
+/// use osm_tile_downloader::{Tile, UrlFormat};
+///
+/// # fn main() {
+/// let format_str = "https://{s}.foo.com/{x}/{y}/{z}.png".to_owned();
+/// let url_fmt = UrlFormat::from_string(format_str);
+/// let tile = Tile::new(1, 2, 3);
+///
+/// for _ in 0..6 {
+///     println!("{}", url_fmt.tile_url(&tile));
+/// }
+/// # }
+/// ```
+///
+/// ```
+/// https://a.foo.com/1/2/3.png
+/// https://b.foo.com/1/2/3.png
+/// https://c.foo.com/1/2/3.png
+/// https://a.foo.com/1/2/3.png
+/// https://b.foo.com/1/2/3.png
+/// https://c.foo.com/1/2/3.png
+/// ```
 pub struct UrlFormat {
     inc: Mutex<RefCell<u8>>,
     format_str: String,
 }
 
 impl UrlFormat {
-    pub fn from_str(format_str: String) -> Self {
+    /// Create a new URL formatter from a given format string.
+    pub fn from_string(format_str: String) -> Self {
         Self {
             inc: Mutex::new(RefCell::new(0)),
             format_str,
@@ -30,6 +65,7 @@ impl UrlFormat {
         val
     }
 
+    /// Get a formatted URL for the given tile.
     pub fn tile_url(&self, tile: &Tile) -> Result<String> {
         let inc = self.get_inc() as usize;
         let vars = hashmap! {

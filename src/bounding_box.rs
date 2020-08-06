@@ -58,9 +58,13 @@ impl BoundingBox {
         }
     }
 
+    /// Create a new bounding box from the given fixture.
     pub fn from_fixture(fixture: Fixture) -> Self {
+        use Fixture::*;
+
         match fixture {
-            Fixture::USA => Self::new_deg(49.4325, -65.7421, 23.8991, -125.3321),
+            USA => Self::new_deg(49.4325, -65.7421, 23.8991, -125.3321),
+            AachenGermany => Self::new_deg(50.811, 6.1649, 50.7492, 6.031),
         }
     }
 
@@ -90,8 +94,11 @@ impl BoundingBox {
     }
 }
 
+/// A bounding box fixture containing preset coordinates for a known geographic
+/// region (a continent, country, city, etc).
 pub enum Fixture {
     USA,
+    AachenGermany,
 }
 
 impl std::str::FromStr for Fixture {
@@ -102,6 +109,10 @@ impl std::str::FromStr for Fixture {
 
         if s.to_lowercase().starts_with("us") {
             return Ok(USA);
+        }
+
+        if s.to_lowercase().starts_with("aachen") {
+            return Ok(AachenGermany);
         }
 
         Err("unrecognized fixture")
