@@ -2,7 +2,7 @@ use clap::{
     app_from_crate, crate_authors, crate_description, crate_name, crate_version,
     AppSettings, Arg, ArgMatches,
 };
-use std::{path::PathBuf, time::Duration};
+use std::time::Duration;
 
 use crate::validators::*;
 use osm_tile_downloader::{BoundingBox, Config, Fixture, UrlFormat};
@@ -30,7 +30,7 @@ pub struct Args {
     pub timeout: Duration,
     pub min_zoom: u8,
     pub max_zoom: u8,
-    pub output_dir: PathBuf,
+    pub output_dir: String,
     pub url: String,
     pub fetch_existing: bool,
     pub dry_run: bool,
@@ -81,17 +81,11 @@ impl Args {
             ),
         };
 
-        let output_dir = {
-            let mut buf = PathBuf::new();
-            buf.push(matches.value_of(OUTPUT_DIR_ARG).unwrap());
-            buf
-        };
-
         Self {
             min_zoom,
             max_zoom,
             bounding_box,
-            output_dir,
+            output_dir: matches.value_of(OUTPUT_DIR_ARG).unwrap().into(),
             parallel_fetches: matches
                 .value_of(PARALLEL_FETCHES_ARG)
                 .unwrap()
@@ -105,7 +99,7 @@ impl Args {
             timeout: Duration::from_secs(
                 matches.value_of(TIMEOUT_ARG).unwrap().parse().unwrap(),
             ),
-            url: matches.value_of(URL_ARG).unwrap().to_owned(),
+            url: matches.value_of(URL_ARG).unwrap().into(),
             fetch_existing: matches.is_present(FETCH_EXISTING_ARG),
             dry_run: matches.is_present(DRY_RUN_ARG),
         }

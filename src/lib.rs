@@ -27,19 +27,21 @@
 //!
 //! # Library Example
 //! ```rust
-//! use osm_tile_downloader::{fetch, BoundingBox, Config};
-//! use std::path::Path;
+//! use osm_tile_downloader::{fetch, BoundingBox, Config, UrlFormat};
+//! use std::time::Duration;
 //!
 //! # #[tokio::main]
 //! # async fn main() {
 //! let config = Config {
 //!     bounding_box: BoundingBox::new_deg(50.811, 6.1649, 50.7492, 6.031),
 //!     fetch_rate: 10,
-//!     output_folder: Path::new("./tiles"),
+//!     output_folder: "./tiles".into(),
 //!     request_retries_amount: 3,
-//!     url: "https://{s}.tile.openstreetmap.de/{z}/{x}/{y}.png",
-//!     timeout_secs: 30,
-//!     max_zoom: 10,
+//!     url: UrlFormat::from_string("https://{s}.tile.openstreetmap.de/{z}/{x}/{y}.png".into()),
+//!     timeout: Duration::from_secs(30),
+//!     min_zoom: 1,
+//!     max_zoom: 2,
+//!     fetch_existing: false,
 //! };
 //!
 //! fetch(config).await.expect("failed fetching tiles");
@@ -58,27 +60,29 @@ pub use fetch::fetch;
 pub use tile::Tile;
 pub use url::UrlFormat;
 
-// #[cfg(test)]
-// mod tests {
-//     use super::*;
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-//     #[test]
-//     #[should_panic]
-//     fn bbox_panics_deg() {
-//         BoundingBox::new_deg(360.0, 0.0, 0.0, 0.0);
-//     }
+    #[test]
+    #[should_panic]
+    fn bbox_panics_deg() {
+        BoundingBox::new_deg(360.0, 0.0, 0.0, 0.0);
+    }
 
-//     #[test]
-//     #[should_panic]
-//     fn bbox_panics_rad() {
-//         BoundingBox::new(7.0, 3.0, 3.0, 3.0);
-//     }
+    #[test]
+    #[should_panic]
+    fn bbox_panics_rad() {
+        BoundingBox::new(7.0, 3.0, 3.0, 3.0);
+    }
 
-//     #[test]
-//     fn tile_index() {
-//         assert_eq!(
-//             tile_indices(18, 6.0402f64.to_radians(), 50.7929f64.to_radians()),
-//             (135470, 87999)
-//         );
-//     }
-// }
+    #[test]
+    fn tile_index() {
+        let tile = Tile::from_coords_and_zoom(
+            50.7929f64.to_radians(),
+            6.0402f64.to_radians(),
+            18,
+        );
+        assert_eq!((tile.x, tile.y), (135470, 87999));
+    }
+}

@@ -1,4 +1,4 @@
-use std::{fmt::Debug, path::PathBuf, time::Duration};
+use std::{fmt::Debug, time::Duration};
 
 use crate::bounding_box::BoundingBox;
 use crate::tile::Tile;
@@ -17,7 +17,7 @@ pub struct Config {
     pub fetch_rate: u8,
 
     /// The folder to output the data to.
-    pub output_folder: PathBuf,
+    pub output_folder: String,
 
     /// How many times to retry a failed HTTP request.
     pub request_retries_amount: u8,

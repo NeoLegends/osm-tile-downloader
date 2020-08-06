@@ -20,20 +20,22 @@ const OSM_SERVERS: &[&str] = &["a", "b", "c"];
 ///
 /// # Example
 /// ```rust
+/// # use anyhow::Result;
 /// use osm_tile_downloader::{Tile, UrlFormat};
 ///
-/// # fn main() {
+/// # fn main() -> Result<()> {
 /// let format_str = "https://{s}.foo.com/{x}/{y}/{z}.png".to_owned();
 /// let url_fmt = UrlFormat::from_string(format_str);
 /// let tile = Tile::new(1, 2, 3);
 ///
 /// for _ in 0..6 {
-///     println!("{}", url_fmt.tile_url(&tile));
+///     println!("{}", url_fmt.tile_url(&tile)?);
 /// }
+/// # Ok(())
 /// # }
 /// ```
 ///
-/// ```
+/// ```ignore
 /// https://a.foo.com/1/2/3.png
 /// https://b.foo.com/1/2/3.png
 /// https://c.foo.com/1/2/3.png

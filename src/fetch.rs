@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 use clap::crate_version;
 use futures::{prelude::*, stream};
 use indicatif::{ProgressBar, ProgressStyle};
-use std::time::Duration;
+use std::{path::Path, time::Duration};
 use tokio::fs;
 
 use crate::config::Config;
@@ -18,19 +18,21 @@ const ZERO_DURATION: Duration = Duration::from_secs(0);
 ///
 /// # Example
 /// ```rust
-/// use osm_tile_downloader::{fetch, BoundingBox, Config};
-/// # use std::path::Path;
+/// use osm_tile_downloader::{fetch, BoundingBox, Config, UrlFormat};
+/// # use std::time::Duration;
 ///
 /// # #[tokio::main]
 /// # async fn main() {
 /// let config = Config {
 ///     bounding_box: BoundingBox::new_deg(50.811, 6.1649, 50.7492, 6.031),
 ///     fetch_rate: 10,
-///     output_folder: Path::new("./tiles"),
+///     output_folder: "./tiles".into(),
 ///     request_retries_amount: 3,
-///     url: "https://{s}.tile.openstreetmap.de/{z}/{x}/{y}.png",
-///     timeout_secs: 30,
-///     max_zoom: 10,
+///     url: UrlFormat::from_string("https://{s}.tile.openstreetmap.de/{z}/{x}/{y}.png".into()),
+///     timeout: Duration::from_secs(30),
+///     min_zoom: 1,
+///     max_zoom: 2,
+///     fetch_existing: false,
 /// };
 ///
 /// fetch(config).await.expect("failed fetching tiles");
@@ -40,7 +42,7 @@ const ZERO_DURATION: Duration = Duration::from_secs(0);
 /// # Panics
 /// Panics if the specified output folder exists and is not a folder but a file.
 pub async fn fetch(cfg: Config) -> Result<()> {
-    let output_folder = cfg.output_folder.as_path();
+    let output_folder = Path::new(&cfg.output_folder);
 
     assert!(
         !output_folder.exists() || output_folder.is_dir(),
