@@ -13,7 +13,7 @@ const OSM_SERVERS: &[&str] = &["a", "b", "c"];
 /// - `x`: the X coordinate of the tile
 /// - `y`: the Y coordinate of the tile
 /// - `z`: the Z coordinate (zoom level) of the tile
-/// - `s`: the subdomain, randomly chosen from `["a", "b", "c"]`
+/// - `s`: the subdomain, sequentially chosen from `["a", "b", "c"]`
 ///
 /// Subdomains (`{s}`) aren't required, but they help with parallel
 /// downloads. Format tokens should be surrounded by curly brackets.
@@ -28,20 +28,14 @@ const OSM_SERVERS: &[&str] = &["a", "b", "c"];
 /// let url_fmt = UrlFormat::from_string(format_str);
 /// let tile = Tile::new(1, 2, 3);
 ///
-/// for _ in 0..6 {
-///     println!("{}", url_fmt.tile_url(&tile)?);
-/// }
+/// assert_eq!(url_fmt.tile_url(&tile)?, "https://a.foo.com/1/2/3.png");
+/// assert!(url_fmt.tile_url(&tile)?.starts_with("https://b.foo.com"));
+/// assert!(url_fmt.tile_url(&tile)?.starts_with("https://c.foo.com"));
+/// assert!(url_fmt.tile_url(&tile)?.starts_with("https://a.foo.com"));
+/// assert!(url_fmt.tile_url(&tile)?.starts_with("https://b.foo.com"));
+/// assert!(url_fmt.tile_url(&tile)?.starts_with("https://c.foo.com"));
 /// # Ok(())
 /// # }
-/// ```
-///
-/// ```ignore
-/// https://a.foo.com/1/2/3.png
-/// https://b.foo.com/1/2/3.png
-/// https://c.foo.com/1/2/3.png
-/// https://a.foo.com/1/2/3.png
-/// https://b.foo.com/1/2/3.png
-/// https://c.foo.com/1/2/3.png
 /// ```
 pub struct UrlFormat {
     inc: Mutex<RefCell<u8>>,
