@@ -31,18 +31,25 @@ osm-tile-downloader \
 ```rust
 use osm_tile_downloader::{fetch, BoundingBox, Config};
 use std::path::Path;
+use std::time::Duration;
 
-let config = Config {
-    bounding_box: BoundingBox::new_deg(50.811, 6.1649, 50.7492, 6.031),
-    fetch_rate: 10,
-    output_folder: Path::new("./tiles"),
-    request_retries_amount: 3,
-    url: "https://{s}.tile.openstreetmap.de/{z}/{x}/{y}.png",
-    timeout_secs: 30,
-    zoom_level: 10,
-};
+async fn fetch_tiles() {
+    let config = Config {
+        bounding_box: BoundingBox::new_deg(50.811, 6.1649, 50.7492, 6.031),
+        fetch_rate: 10,
+        output_folder: Path::new("./tiles"),
+        request_retries_amount: 3,
+        url: "https://{s}.tile.openstreetmap.de/{z}/{x}/{y}.png",
+        timeout: Duration::new(30, 0),
+        zoom_level: 10,
+    };
+    fetch(config).await.expect("failed fetching tiles");
+}
 
-fetch(config).await.expect("failed fetching tiles");
+fn main() {
+    let mut rt = tokio::runtime::Runtime::new().unwrap();
+    rt.block_on(fetch_tiles());
+}
 ```
 
 License: MIT
