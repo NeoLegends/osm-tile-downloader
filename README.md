@@ -22,12 +22,13 @@ osm-tile-downloader \
   --east 6.1649 \
   --south 50.7492 \
   --west 6.031 \
-  --url https://\{s\}.tile.openstreetmap.de/\{z\}/\{x\}/\{y\}.png \
+  --url "https://{s}.tile.openstreetmap.de/{z}/{x}/{y}.png" \
   --output ./tiles \
   --rate 10
 ```
 
 ## Library Example
+
 ```rust
 use osm_tile_downloader::{fetch, BoundingBox, Config};
 use std::path::Path;
